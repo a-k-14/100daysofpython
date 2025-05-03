@@ -1,0 +1,11 @@
+from,to,subject,body
+vgstcof@gmail.com,greenup.4546@gmail.com,Message 6,"Hi,
+
+This is another email from python.
+
+Regards."
+vgstcof@gmail.com,greatbb08@gmail.com,Message 3,"Again, testing feature to save sent mails to csv with pandas in python"
+vgstcof@gmail.com,greatbb08@gmail.com,Message 4,ew
+vgstcof@gmail.com,greatbb08@gmail.com,Message 2,"Again, testing feature to save sent mails to csv with pandas in python"
+vgstcof@gmail.com,greatbb08@gmail.com,Message 1,Testing feature to save sent mails to csv with pandas in python
+vgstcof@gmail.com,greenup.4546@gmail.com,Message 5,This is a message from python ft. tkinter pandas smtplib

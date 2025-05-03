@@ -1,0 +1,44 @@
+[
+    {
+        "from": "vgstcof@gmail.com",
+        "to": "greatbb08@gmail.com",
+        "subject": "ed",
+        "body": "e"
+    },
+    {
+        "from": "vgstcof@gmail.com",
+        "to": "greatbb08@gmail.com",
+        "subject": "dv",
+        "body": ""
+    },
+    {
+        "from": "vgstcof@gmail.com",
+        "to": "greatbb08@gmail.com",
+        "subject": "Testing the scroll possibility in the text filed",
+        "body": "Hello Team,\n\nThis email is purposefully long to test the scrolling ability of the text element.\n\nLorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
+    },
+    {
+        "from": "vgstcof@gmail.com",
+        "to": "greatbb08@gmail.com",
+        "subject": "View sent emails feature update - Apr-13",
+        "body": "Hi,\n\nWe have successfully implemented feature request to show the sent emails in a separate window.\n\nRegards."
+    },
+    {
+        "from": "vgstcof@gmail.com",
+        "to": "greatbb08@gmail.com",
+        "subject": "Message 3",
+        "body": "Hi\n\nThis is a message from python after implementing json storage for sent mails.\n\nRegards."
+    },
+    {
+        "from": "vgstcof@gmail.com",
+        "to": "greatbb08@gmail.com",
+        "subject": "Message 2",
+        "body": "Hi"
+    },
+    {
+        "from": "vgstcof@gmail.com",
+        "to": "greatbb08@gmail.com",
+        "subject": "Message 1",
+        "body": "Hi"
+    }
+]
