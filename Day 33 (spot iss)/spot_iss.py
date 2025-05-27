@@ -6,9 +6,9 @@ from email.message import EmailMessage
 import time
 
 # GOAL
-# to know if the iss is passing through current user location within +/- 5 deg lat and long
-# if yes, and if the time is night
-# then send a mail to the user to look up
+# to know if the iss is passing through the current user location within +/- 5 deg lat and long
+# if yes, and if the time is nightr
+# then email the user to look up
 
 # user current location for checking day/night
 MY_LAT = 12.968999
