@@ -44,18 +44,21 @@ class TaskTimer:
         # makes a window borderless and removes from taskbar
         self.app.overrideredirect(True)
 
+
         # -----------assets-----------
         # Excel file to store the task list, time
         self.excel_file = "Task_Timer.xlsx"
         # icon for the system tray
-        self.app_icon = "15.ico"
-
+        self.app_icon = "app_icon.ico"
         # Sheet in the Excel file to store the task list
         self.excel_tasks_sheet = "Tasks"
         # name of the column storing tasks inside the Tasks sheet
         self.tasks_col_name = "Tasks"
         # Sheet in the Excel file to store the time for each task
         self.excel_time_sheet = "Time"
+        # excel icon for excel_btn
+        self.excel_btn_icon = "excel_btn_icon.png"
+
         # get the task list from the Excel if it exists, to populate task_list_menu combobox dropdown
         self.task_list = self._get_task_list()
         # task selected from the task_list_menu combobox
@@ -69,15 +72,17 @@ class TaskTimer:
         self.start_time = None # to store the start time of the task
         self.end_time = None # to store the end time of the task
 
+        # to manage placeholder text in the notes_entry field
+        # when is_placeholder_active is True, show PH text in the notes_entry filed
+        self.is_placeholder_active = True
+
         # declared it here as these are used by multiple methods
         self.task_list_menu = None
         self.status_label = None
         self.timer_display = None
         self.start_btn = None
         # Textbox for user to type in task notes
-        self.notes_entry = None
-        # build the ui (widgets) of the app
-        self._build_ui()
+        self.notes_textbox = None
 
         # to store the after() ID and to handle .after() calls overlaps i.e., to be used in .after_cancel()
         self.status_update_queue = None
@@ -96,11 +101,17 @@ class TaskTimer:
         # start the sys tray thread
         self.systray_thread.start()
 
+        # build the ui (widgets) of the app
+        self._build_ui()
 
         # position app window in the bottom right corner of the screen
         self.position_window()
+        # ensure the app is brought to the top on start
         self.app.attributes("-topmost", True)
-        self.app.attributes("-topmost", False)
+        # self.app.attributes("-topmost", False)
+        # retain the top position for 500 ms and release after that
+        self.app.after(500, lambda: self.app.attributes('-topmost', False))
+
         self.app.mainloop()
 
 
@@ -154,6 +165,12 @@ class TaskTimer:
         # space before < to ensure this stays at the top after sorting the list
         if choice == "<Add new task...>":
             self.task_list_menu.set("")
+            # set the current_task to "" so that the previously set task is cleared, else we can still run the timer without typing or selecting a new task
+            # Flow - select a task from the dropdown (task_list_menu combobox) -> current_task = selected_task due to else block
+            # select "<Add new task...>" from the dropdown, task_list_menu will be set to "" and cursor will be blinking, but the current_task still has a value from previous selection
+            # so, even without typing in a new task or selecting one from the dropdown, use can start the timer with start_btn as the check 'if self.current_task' in run_timer evaluates true
+            # hence we have to clear the current_task whenever '"<Add new task...>"' is selected
+            self.current_task = ""
             self.task_list_menu.focus()
         else:
             # set the current task value
@@ -303,6 +320,38 @@ class TaskTimer:
             self.timer_running_queue = self.app.after(1000, self._update_timer)
 
 
+    def _show_placeholder(self):
+        """
+        sets the placeholder text in the notes_entry field
+        """
+        self.notes_textbox.insert("1.0", "Add notes")
+        self.notes_textbox.configure(text_color="#7a848d")
+
+
+    def _notes_focus_in(self, event):
+        """
+        when notes_textbox is focused and if is_placeholder_active = True
+        clear the placeholder text and change font color #7a848d -> #f2f2f2
+        """
+        print(f"_notes_focs_in: {event}")
+        if self.is_placeholder_active:
+            self.notes_textbox.delete("1.0", "end")
+            self.notes_textbox.configure(text_color="#f2f2f2")
+            self.is_placeholder_active = False
+
+
+    def _notes_focus_out(self, event):
+        """
+        when notes_textbox loses focus, checks if there is a user entered text in it
+        if there is no user entered text, then the placeholder text is shown
+        """
+        print(f"_notes_focs_out: {event}")
+        if not self.notes_textbox.get("1.0", "end-1c").strip():
+            # user has not entered any text or entered just spaces
+            self._show_placeholder()
+            self.is_placeholder_active = True
+
+
     def _run_timer(self):
         """
         Handles starting, pausing, resuming timer
@@ -325,12 +374,14 @@ class TaskTimer:
                 # to not select a new task while the timer is running
                 self.task_list_menu.configure(state="disabled")
                 self._update_timer()
+                self._update_status_label("Start", 0)
                 print("Timer running")
             else:
                 self.is_timer_running = TimerStatus.PAUSED
                 self.start_btn.configure(text="▶")
                 # as we are updating self.is_timer_running = TimerStatus.STOPPED, _update_timer() will stop as it runs only when the timer is running -> if self.is_timer_running == TimerStatus.RUNNING: ...
                 # self._update_timer()
+                self._update_status_label("Pause", 0)
                 print("Timer paused")
         else:
             # if no task is selected before starting the timer (hitting start_btn)
@@ -371,14 +422,14 @@ class TaskTimer:
             # write data to the Excel Date, Task, Duration, Notes, Start Time, End Time, Seconds
             # print(f"{self.start_time:%d-%b-%Y}, {self.current_task}, {self._humanize_time()}, {self.notes_entry.get('1.0', 'end-1c')},{self.start_time:%I:%M %p}, {self.end_time:%I:%M %p}, {self.seconds_elapsed}")
             write_status = self._append_data_to_excel(self.excel_time_sheet,
-                                       Date=f"{self.start_time:%d-%b-%Y}",
-                                       Task=self.current_task,
-                                       Duration=self._humanize_time(),
-                                       Notes=self.notes_entry.get("1.0", "end-1c"),
-                                       Start_Time=f"{self.start_time:%I:%M %p}",
-                                       End_Time=f"{self.end_time:%I:%M %p}",
-                                       Total_Seconds=self.seconds_elapsed
-                                       )
+                                                      Date=f"{self.start_time:%d-%b-%Y}",
+                                                      Task=self.current_task,
+                                                      Duration=self._humanize_time(),
+                                                      Notes=self.notes_textbox.get("1.0", "end-1c"),
+                                                      Start_Time=f"{self.start_time:%I:%M %p}",
+                                                      End_Time=f"{self.end_time:%I:%M %p}",
+                                                      Total_Seconds=self.seconds_elapsed
+                                                      )
             # show status of saving the data to the Excel file
             if write_status:
                 self._update_status_label("Saved", 0)
@@ -405,7 +456,7 @@ class TaskTimer:
         print("Timer stopped")
 
 
-    def _reset_timer(self):
+    def _reset_timer(self, status=""):
         """
         Resets the timer to its initial stopped state
         stop timer
@@ -422,7 +473,7 @@ class TaskTimer:
             self.task_list_menu.configure(state="normal")
             self.seconds_elapsed = 0
             self.timer_text.set("00:00:00")
-            self.notes_entry.delete("1.0", "end") # clear notes
+            self.notes_textbox.delete("1.0", "end") # clear notes
             self.start_btn.configure(text="▶")
             # as we are updating self.is_timer_running = TimerStatus.STOPPED, _update_timer() will stop as it runs only when the timer is running
             # self._update_timer()
@@ -430,6 +481,15 @@ class TaskTimer:
             self.app.focus()
             if self.timer_running_queue:
                 self.app.after_cancel(self.timer_running_queue)
+            # we use reset_timer method inside the end_timer method too to avoid code repetition as there are many common operations between both the methods,
+            # however, the status for both the methods is diff
+            # for reset_timer -> "Reset"
+            # for end_timer -> "Saved"/"Error"
+            # to address different status for both methods we have a check before updating status
+            # we pass status "Reset" for reset_btn call
+            # we pass nothing for call from end_timer
+            if status:
+                self._update_status_label(status, 0)
         print("Timer reset")
 
 
@@ -489,16 +549,17 @@ class TaskTimer:
         return os.path.join(base_path, file_name)
 
 
-    def _get_systray_icon(self) -> ImageFile:
+    def _get_icon(self, icon_name) -> ImageFile:
         """
         checks the existence of icon at the path returned by _get_resource_path() method
         and if the icon file is valid, readable, not corrupted
         if it exists and valid, returns the icon
         else returns a fallback icon created with ImageDraw
+        :param str icon_name
         :return: icon_image
         """
         # get the app icon path
-        app_icon_path = self._get_resource_path(self.app_icon)
+        app_icon_path = self._get_resource_path(icon_name)
         # print(f"{app_icon_path=}")
 
         if os.path.exists(app_icon_path):
@@ -511,7 +572,7 @@ class TaskTimer:
             # get the initials of the app name to be written into blank image
             # default in split is by " " space
             app_name_initials = "".join([word[0] for word in self.app_title.split()])
-            # create an image drawer object to write app name 'TK' for Time Keeper to the blank image
+            # create an image drawer object to write app name 'TK' for timekeeper to the blank image
             drawer = ImageDraw.Draw(icon_image)
             # get a font to draw the app initials into blank image
             # drawer.getfont() -> this gives 'self._draw(no_color_updates=True) # faster drawing without color changes'
@@ -521,6 +582,7 @@ class TaskTimer:
 
         return icon_image
 
+    #---------system tray icon [start]---------
 
     def _initialize_systray_icon(self):
         """
@@ -537,13 +599,17 @@ class TaskTimer:
             # create menu items for the sys tray icon right-click
             # default True to make it the default action on single click with LMB on the sys tray icon
             menu_items = (
-                pystray.MenuItem(f"Open {self.app_title}", self._toggle_app_visibility, default=True),
+                pystray.MenuItem(f"Open {self.app_title}", self._open_window, default=True),
+                pystray.MenuItem("Hide", self._hide_window),
                 pystray.MenuItem("Quit", self._quit_app)
             )
 
             # get the image file to use as icon
-            icon_image = self._get_systray_icon()
+            icon_image = self._get_icon(self.app_icon)
             # create the systray icon with pystray
+            # name="time_keeper_widget" -> used by the os/pyinstaller
+            # icon_image -> icon shown in sys tray
+            # f"{self.app_title} Widget" -> title/tooltip that shows when mouse is hovered on the icon
             self.systray_icon = pystray.Icon("time_keeper_widget", icon_image, f"{self.app_title} Widget", menu=menu_items)
             # start the sys tray icon loop
             self.systray_icon.run_detached()
@@ -552,24 +618,20 @@ class TaskTimer:
             self.app.destroy()
 
 
-    def _toggle_app_visibility(self):
+    def _open_window(self):
         """
-        Hides or unhides the app window
+        Opens the app window and brings to the front
         :return:
         """
 
         # check if the app window is visible or not
         is_app_visible = self.app.winfo_ismapped()
 
-        if is_app_visible:
-            # if visible, hide it
-            self.app.withdraw()
-        else:
-            # if not visible, unhide and show it
+        if not is_app_visible:
             self.app.deiconify()
-            # Apply and then release topmost to ensure it's at the very top temporarily
-            self.app.after(0, lambda: self.app.attributes('-topmost', True))
-            self.app.after(0, lambda: self.app.attributes('-topmost', False))  # Release after 500ms (150+500)
+
+        self.app.after(0, lambda: self.app.attributes('-topmost', True))
+        self.app.after(10, lambda: self.app.attributes('-topmost', False))  # Release after 500ms (150+500)
 
 
     def _quit_app(self):
@@ -586,6 +648,41 @@ class TaskTimer:
 
         # destroy ctk window and exit the mainloop
         self.app.destroy()
+
+    # ---------system tray icon [end]---------
+
+    def _open_excel_file(self):
+        """
+        Opens the Excel file using the default system application
+        Provides user feedback via the status label
+        """
+        if not os.path.exists(self.excel_file):
+            # if the file does not exist
+            self._update_status_label("Error", 1)
+            return
+
+        try:
+            if sys.platform.startswith('win'):
+                # Windows: uses the default application for the file type
+                os.startfile(self.excel_file)
+                self._update_status_label("Open", 0)
+            elif sys.platform.startswith('darwin'):
+                # macOS: uses the 'open' command
+                import subprocess
+                subprocess.run(['open', self.excel_file], check=True)
+                self._update_status_label("Opened", 0)
+            elif sys.platform.startswith('linux'):
+                # Linux: uses 'xdg-open' which opens with the default app
+                import subprocess
+                subprocess.run(['xdg-open', self.excel_file], check=True)
+                self._update_status_label("Opened", 0)
+            else:
+                self._update_status_label("Error", 1)
+
+        except (FileNotFoundError, Exception) as e:
+            # This might happen if the command itself (e.g., 'open', 'xdg-open') is not found
+            self._update_status_label("Error", 1)
+            print(f"Error opening the file: {e}")
 
 
     def _build_ui(self):
@@ -619,7 +716,6 @@ class TaskTimer:
         title_label.bind("<Button-1>", self._start_drag)
         title_label.bind("<B1-Motion>", self._do_drag)
 
-
         # dropdown menu to choose the tasks from task_list
         self.task_list_menu = ctk.CTkComboBox(self.app, values=self.task_list, command=self._list_menu_callback)
         self.task_list_menu.grid(row=2, column=1, padx=10, pady=(10, 3), sticky="we", columnspan=3)
@@ -633,9 +729,7 @@ class TaskTimer:
         hint_label.grid(row=3, column=1, columnspan=3, padx=10, sticky="w")
 
         # status text to show a message on task addition
-        # 009933 07b17b
-        self.status_label = ctk.CTkLabel(self.app, text="", text_color="#009933",
-                                         font=("Segoe UI", 12, "bold"), height=5)
+        self.status_label = ctk.CTkLabel(self.app, text="", font=("Segoe UI", 12, "bold"), height=5)
         self.status_label.grid(row=3, column=3, sticky="e", padx=(0, 12))
 
         # entry widget to display the running timer
@@ -648,12 +742,19 @@ class TaskTimer:
         self.timer_display.grid(row=4, column=1, columnspan=3, padx=10, pady=10, sticky="we")
 
         # field to enter notes for the task
-        self.notes_entry = ctk.CTkTextbox(self.app, text_color="#f2f2f2", width=220, height=65,
+        self.notes_textbox = ctk.CTkTextbox(self.app, text_color="#f2f2f2", width=220, height=65,
                                           font=("Segoe UI", 14), wrap="word",
                                           border_width=1, border_color="#4c5154")
-        self.notes_entry.grid(row=5, column=1, columnspan=3, sticky="we", padx=10)
+        self.notes_textbox.grid(row=5, column=1, columnspan=3, sticky="we", padx=10)
+
+        # show placeholder text at the start
+        self._show_placeholder()
+        # bind focus-in and focus-out events to handle show/hide of the placeholder text
+        self.notes_textbox.bind("<FocusIn>", self._notes_focus_in)
+        self.notes_textbox.bind("<FocusOut>", self._notes_focus_out)
 
         # button frame to hold the buttons and adjust their spacing and widths
+        # we have a separate frame for buttons as we have to place 4 buttons in 3 columns
         buttons_frame = ctk.CTkFrame(self.app, fg_color="transparent", height=30)
         buttons_frame.grid(row=6, column=1, columnspan=3, sticky="we")
 
@@ -662,35 +763,32 @@ class TaskTimer:
         buttons_frame.grid_columnconfigure(2, weight=1)
 
         # buttons to control the functionality
+        # self.start_btn is an instance variable as the text changes ▶ -> ⏸ in run_timer method
         self.start_btn = ctk.CTkButton(buttons_frame, text="▶", command=self._run_timer, cursor="hand2", width=50,
                                        font=("Segoe UI Symbol", 16, "bold"), fg_color="#085bbe",
                                        hover_color="#05428b")
         self.start_btn.grid(padx=10, row=6, column=1, sticky="we", pady=10)
 
-        end_btn = ctk.CTkButton(buttons_frame, text="⏹", width=50, cursor="hand2", font=("Segoe UI Symbol", 16, "bold"),
-                                fg_color="#085bbe", command=self._end_timer, hover_color="#05428b")
+        end_btn = ctk.CTkButton(buttons_frame, text="⏹", width=50, cursor="hand2",
+                                font=("Segoe UI Symbol", 16, "bold"), fg_color="#085bbe",
+                                command=self._end_timer, hover_color="#05428b")
         end_btn.grid(row=6, column=2, sticky="we")
 
         reset_btn = ctk.CTkButton(buttons_frame, text="Reset", cursor="hand2", width=60, fg_color="#242424",
-                                  border_color="#414449", border_width=1, command=self._reset_timer,
+                                  border_color="#414449", border_width=1, command=lambda: self._reset_timer("Reset"),
                                   hover_color="#414449")
-        reset_btn.grid(padx=10, row=6, column=3, sticky="we")
+        reset_btn.grid(padx=(10,5), row=6, column=3, sticky="we")
 
-        excel_btn_icon = ctk.CTkImage(dark_image=Image.open("i.png"))
-        open_excel_btn = ctk.CTkButton(buttons_frame, image=excel_btn_icon, cursor="hand2", fg_color="#242424", border_color="#414449", border_width=0, hover_color="#414449", width=1, text="")
-        open_excel_btn.grid(row=6, column=4, padx=(0,10), sticky="we", pady=10)
+        excel_btn_icon = ctk.CTkImage(light_image=self._get_icon(self.excel_btn_icon),
+                                      dark_image=self._get_icon(self.excel_btn_icon), size=(19,19))
+        open_excel_btn = ctk.CTkButton(buttons_frame, image=excel_btn_icon, cursor="hand2", fg_color="#242424",
+                                       border_color="#414449", border_width=0, hover_color="#414449", width=1,
+                                       text="", command=self._open_excel_file)
+        open_excel_btn.grid(row=6, column=4, padx=(0,10), sticky="w", pady=10)
 
-        quit_btn = ctk.CTkButton(self.app, text="Exit", cursor="hand2", width=60, fg_color="#242424", height=5, text_color="#7a848d",
-                                 command=self._reset_timer, font=("Segoe UI", 12, "underline", "bold"),
-                                 hover_color="#414449")
-        # quit_btn.grid(row=7, column=2, padx=10, pady=(0,5), sticky="we")
-
-        another_status = ctk.CTkLabel(self.app, text="Select the task :(", text_color="#b54747",
-                                         font=("Segoe UI", 12, "bold"), height=5)
-        # another_status.grid(row=7, column=1, padx=10, sticky="wn", columnspan=2)
-
-
-
+        signature_label = ctk.CTkLabel(self.app, text="akshay;)", text_color="#303030", fg_color="transparent",
+                                         font=ctk.CTkFont(size=8, weight="bold", slant="italic"), height=5)
+        signature_label.grid(row=6, column=1, sticky="se", columnspan=3)
 
 
     def position_window(self):
