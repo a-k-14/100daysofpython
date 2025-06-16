@@ -4,8 +4,6 @@
 # has buttons -> start, pause, end, reset
 # stores the start time, end time in Excel on click of end button
 # resets timer on reset button click
-import tkinter
-
 import customtkinter as ctk
 import os
 import pandas as pd
@@ -43,7 +41,6 @@ class TaskTimer:
         # to disable the toolbar and make it as a widget,
         # makes a window borderless and removes from taskbar
         self.app.overrideredirect(True)
-
 
         # -----------assets-----------
         # Excel file to store the task list, time
@@ -326,7 +323,8 @@ class TaskTimer:
         """
         self.notes_textbox.insert("1.0", "Add notes")
         self.notes_textbox.configure(text_color="#7a848d")
-
+        # we set the status here instead of in _notes_focus_out() method so that when we call this method in _reset_timer(), even the status is also set
+        self.is_placeholder_active = True
 
     def _notes_focus_in(self, event):
         """
@@ -349,7 +347,7 @@ class TaskTimer:
         if not self.notes_textbox.get("1.0", "end-1c").strip():
             # user has not entered any text or entered just spaces
             self._show_placeholder()
-            self.is_placeholder_active = True
+            # self.is_placeholder_active = True
 
 
     def _run_timer(self):
@@ -418,14 +416,21 @@ class TaskTimer:
         """
         # if the timer is not stopped i.e., is_timer_status is running/paused
         if self.is_timer_running != TimerStatus.STOPPED:
+            # to capture when the task has ended and to be looged to the Excel
             self.end_time = dt.datetime.now()
+            # to avoid capturing placeholder text as notes
+            if self.is_placeholder_active:
+                task_notes = ""
+            else:
+                task_notes = self.notes_textbox.get("1.0", "end-1c")
+
             # write data to the Excel Date, Task, Duration, Notes, Start Time, End Time, Seconds
             # print(f"{self.start_time:%d-%b-%Y}, {self.current_task}, {self._humanize_time()}, {self.notes_entry.get('1.0', 'end-1c')},{self.start_time:%I:%M %p}, {self.end_time:%I:%M %p}, {self.seconds_elapsed}")
             write_status = self._append_data_to_excel(self.excel_time_sheet,
                                                       Date=f"{self.start_time:%d-%b-%Y}",
                                                       Task=self.current_task,
                                                       Duration=self._humanize_time(),
-                                                      Notes=self.notes_textbox.get("1.0", "end-1c"),
+                                                      Notes=task_notes,
                                                       Start_Time=f"{self.start_time:%I:%M %p}",
                                                       End_Time=f"{self.end_time:%I:%M %p}",
                                                       Total_Seconds=self.seconds_elapsed
@@ -474,6 +479,7 @@ class TaskTimer:
             self.seconds_elapsed = 0
             self.timer_text.set("00:00:00")
             self.notes_textbox.delete("1.0", "end") # clear notes
+            self._show_placeholder() # show placeholder text
             self.start_btn.configure(text="▶")
             # as we are updating self.is_timer_running = TimerStatus.STOPPED, _update_timer() will stop as it runs only when the timer is running
             # self._update_timer()
