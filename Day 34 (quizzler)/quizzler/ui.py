@@ -98,8 +98,8 @@ class QuizInterface:
     def exit_with_log(self):
         log_data = {
             "date": self.date,
-            "start_time": self.start_time,
-            "end_time": dt.datetime.now().strftime("%I:%M:%S %p"),
+            "task_start_time": self.start_time,
+            "task_end_time": dt.datetime.now().strftime("%I:%M:%S %p"),
             "questions_from_api": self.quiz.number_of_questions,
             "played_questions": self.quiz.score + self.quiz.incorrect_answers,
             "correct": self.quiz.score,
