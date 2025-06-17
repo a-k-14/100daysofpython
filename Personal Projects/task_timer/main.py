@@ -4,6 +4,8 @@
 # has buttons -> start, pause, end, reset
 # stores the start time, end time in Excel on click of end button
 # resets timer on reset button click
+import math
+
 import customtkinter as ctk
 import os
 import pandas as pd
@@ -69,11 +71,9 @@ class TaskTimer:
         # self.seconds_elapsed_ui = 0
         self.task_start_time = None # to store the start time of the task
         self.task_end_time = None # to store the end time of the task
-        # track the start and end times of a task between pauses, if any
-        self.segment_start = None
-        self.segment_end = None
-        # seconds to be accumulated excluding pause_seconds
-        self.seconds_accumulated = 0.0
+        self.segment_start_time = None # start of a segment, if paused
+        self.segment_end_time = None # end of a segment, if paused
+        self.work_seconds = 0
 
         # to manage placeholder text in the notes_entry field
         # when is_placeholder_active is True, show PH text in the notes_entry filed
@@ -268,70 +268,6 @@ class TaskTimer:
             return False
 
 
-    def _add_task_on_enter(self, event):
-        """
-        To add a new task typed into the task_list_menu combobox to the task_list and Excel, on press of 'Enter' key
-        """
-        # get the text currently in the combobox entry
-        # .strip() removes leading/trailing whitespace
-        new_task = self.task_list_menu.get().strip()
-
-        # if the new_task is not empty and does not exist in the task_list, add it to the task_list
-        if new_task:
-            # to preserve formats like 'ITR' 'GPS'
-            new_task = new_task[0].upper() + new_task[1:]
-            # for robust check on if the task exists
-            task_list_lower = [task.lower() for task in self.task_list]
-            if new_task.lower() not in task_list_lower:
-                # add/append the task to excel and if that is successful, proceed further
-                now = dt.datetime.now()
-                write_status = self._append_data_to_excel(self.excel_tasks_sheet, Tasks=new_task, Status="Active", Added_On = f"{now:%d-%b-%Y T%I:%M %p}")
-
-                # perform further steps
-                if write_status:
-                    self.task_list = self._get_task_list()
-                    # to ensure "<Add new task...>" is at the top of the list
-                    self.task_list[1:] = sorted(self.task_list[1:])
-                    # update the combobox with the new task_list
-                    self.task_list_menu.configure(values=self.task_list)
-                    # set the value to new_task with spaces stripped and capitalized
-                    self.task_list_menu.set(new_task)
-                    # update the current task selection which will be used as validation for starting timer on click of start_btn in run_timer method
-                    self.current_task = new_task
-                    # show the task addition status
-                    self._update_status_label("Added", 0)
-                    # to remove focus (cursor) from the task_list_menu combobox
-                    self.app.focus()
-                else:
-                    self._update_status_label("Error", 1)
-            else:
-                self._update_status_label("Exists", 1)
-        else:
-            self._update_status_label("Empty", 1)
-
-
-    def _update_timer_display(self):
-        """
-        calculates the seconds elapsed and updates the UI
-        """
-        seconds_elapsed_ui = self.seconds_accumulated + (dt.datetime.now() - self.segment_start).total_seconds()
-        seconds_elapsed_ui = int(seconds_elapsed_ui)
-
-        hours_elapsed, remainder = divmod(seconds_elapsed_ui, 3600)
-        # the remainder we get here is the seconds remaining
-        minutes_elapsed, remainder = divmod(remainder, 60)
-        # show the timer in the timer_display Entry via timer_text instance variable
-        self.timer_text.set(f"{hours_elapsed:02}:{minutes_elapsed:02}:{remainder:02}")
-        self._schedule_update_timer()
-
-
-    def _schedule_update_timer(self):
-        # recursively count seconds and update timer text as long as the timer is running
-        # to ensure the first second is displayed after a second has actually elapsed
-        if self.is_timer_running == TimerStatus.RUNNING:
-            self.timer_running_queue = self.app.after(1000, self._update_timer_display)
-
-
     def _show_placeholder(self):
         """
         sets the placeholder text in the notes_entry field
@@ -366,11 +302,95 @@ class TaskTimer:
             # self.is_placeholder_active = True
 
 
-    def _accumulator(self):
+    def _add_task_on_enter(self, event):
         """
-        calculates the duration between segment_start and segment_end times and stores the duration in seconds_accumulated
+        To add a new task typed into the task_list_menu combobox to the task_list and Excel, on press of 'Enter' key
         """
-        self.seconds_accumulated += (self.segment_end - self.segment_start).total_seconds()
+        # get the text currently in the combobox entry
+        # .strip() removes leading/trailing whitespace
+        new_task = self.task_list_menu.get().strip()
+
+        # if the new_task is not empty and does not exist in the task_list, add it to the task_list
+        if new_task:
+            # to preserve formats like 'ITR' 'GPS'
+            new_task = new_task[0].upper() + new_task[1:]
+            # for robust check on if the task exists
+            task_list_lower = [task.lower() for task in self.task_list]
+            if new_task.lower() not in task_list_lower:
+                # add/append the task to excel and if that is successful, proceed further
+                now = dt.datetime.now()
+                write_status = self._append_data_to_excel(self.excel_tasks_sheet, Tasks=new_task, Status="Active",
+                                                          Added_On=f"{now:%d-%b-%Y T%I:%M %p}")
+
+                # perform further steps
+                if write_status:
+                    self.task_list = self._get_task_list()
+                    # to ensure "<Add new task...>" is at the top of the list
+                    self.task_list[1:] = sorted(self.task_list[1:])
+                    # update the combobox with the new task_list
+                    self.task_list_menu.configure(values=self.task_list)
+                    # set the value to new_task with spaces stripped and capitalized
+                    self.task_list_menu.set(new_task)
+                    # update the current task selection which will be used as validation for starting timer on click of start_btn in run_timer method
+                    self.current_task = new_task
+                    # show the task addition status
+                    self._update_status_label("Added", 0)
+                    # to remove focus (cursor) from the task_list_menu combobox
+                    self.app.focus()
+                else:
+                    self._update_status_label("Error", 1)
+            else:
+                self._update_status_label("Exists", 1)
+        else:
+            self._update_status_label("Empty", 1)
+
+
+    def _update_timer_display(self):
+        """
+        calculates the seconds elapsed and updates the UI
+        """
+        seconds_elapsed_ui = self.work_seconds + (dt.datetime.now() - self.segment_start_time).seconds
+        seconds_elapsed_ui = int(seconds_elapsed_ui)
+
+        hours_elapsed, remainder = divmod(seconds_elapsed_ui, 3600)
+        # the remainder we get here is the seconds remaining
+        minutes_elapsed, remainder = divmod(remainder, 60)
+        # show the timer in the timer_display Entry via timer_text instance variable
+        self.timer_text.set(f"{hours_elapsed:02}:{minutes_elapsed:02}:{remainder:02}")
+        self._schedule_update_timer()
+
+
+    def _schedule_update_timer(self):
+        # recursively count seconds and update timer text as long as the timer is running
+        # to ensure the first second is displayed after a second has actually elapsed
+        if self.is_timer_running == TimerStatus.RUNNING:
+            self.timer_running_queue = self.app.after(1000, self._update_timer_display)
+
+
+    def _humanize_time(self, minutes) -> str:
+        """
+        Formats the total minutes H:MM string format to be logged to Excel
+        Handles durations longer than 24 hours by accumulating hours
+        :return: str: 2h 12m
+        """
+        # this is incorrect as there may be pause time in between
+        # difference = self.task_end_time - self.task_start_time
+        # diff_seconds = difference.total_seconds()
+        # seconds_elapsed represents only the time in seconds timer ran and not paused
+        if minutes:
+            hours, minutes = divmod(minutes, 60)
+            return f"{hours:.0f}h {minutes:02.0f}m" if hours else f"{minutes:.0f}m"
+        else:
+            return "0"
+
+
+    def _seconds_accumulator(self):
+        """
+        calculate the segment duration (segment_end_time - segment_start_time), when paused
+        and add the duration to work seconds
+        only completed second is considered
+        """
+        self.work_seconds += int((self.segment_end_time - self.segment_start_time).total_seconds())
 
 
     def _run_timer(self):
@@ -390,22 +410,25 @@ class TaskTimer:
                 # this preserves the original start time when resuming from a PAUSED state.
                 # only set if completely new task
                 if self.is_timer_running == TimerStatus.STOPPED:
+                    # set the task_start_time at the start of the task
                     self.task_start_time = dt.datetime.now()
-                # set the start time of the segment (at the first run, i.e., starting when TimerStatus.STOPPED)
-                self.segment_start = dt.datetime.now()
+
+                # set the start of the segment
+                self.segment_start_time = dt.datetime.now()
+
                 self.is_timer_running = TimerStatus.RUNNING
                 self.start_btn.configure(text="⏸")
                 # to not select a new task while the timer is running
                 self.task_list_menu.configure(state="disabled")
-                self._update_timer_display()
+                self._schedule_update_timer()
                 self._update_status_label("Start", 0)
                 # print("Timer running")
             else:
+                # capture the end of segment when paused
+                self.segment_end_time = dt.datetime.now()
+                # accumulate the work seconds when paused
+                self._seconds_accumulator()
                 self.is_timer_running = TimerStatus.PAUSED
-                # store the time when the task is paused
-                self.segment_end = dt.datetime.now()
-                # store the work seconds before till task is paused
-                self._accumulator()
                 self.start_btn.configure(text="▶")
                 # as we are updating self.is_timer_running = TimerStatus.STOPPED, _update_timer() will stop as it runs only when the timer is running -> if self.is_timer_running == TimerStatus.RUNNING: ...
                 # self._update_timer()
@@ -420,35 +443,23 @@ class TaskTimer:
         self.app.focus()
 
 
-    def _humanize_time(self, seconds) -> str:
+    def _calculate_duration(self):
         """
-        Formats the total seconds elapsed (self.seconds_elapsed) into H:MM string format to be used for saving to the Excel
-        Handles durations longer than 24 hours by accumulating hours
-        Calculates timedelta = task_end_time - task_start_time and returns the time difference in a human-readable form - 2h:12m
-        :return: str: 2h:12m
+        calculates work_minutes, pause_minutes, total_minutes at the end of the task to be logged to Excel
         """
-        # this is incorrect as there may be pause time in between
-        # difference = self.task_end_time - self.task_start_time
-        # diff_seconds = difference.total_seconds()
-        # seconds_elapsed represents only the time in seconds timer ran and not paused
-        if seconds:
-            hours, remainder = divmod(seconds, 3600)
-            minutes, remainder = divmod(remainder, 60)
+        # we consider only completed minutes and seconds, fractional seconds (i.e., .total_seconds()) are ignored
+        work_minutes = self.work_seconds // 60
 
-            return f"{hours:.0f}h:{minutes:02.0f}m:{remainder:02.0f}"
-        else:
-            return ""
+        # trim seconds to match with Excel visible times
+        task_start_trimmed = self.task_start_time.replace(second=0, microsecond=0)
+        task_end_trimmed = self.task_end_time.replace(second=0, microsecond=0)
 
+        total_task_seconds = (task_end_trimmed - task_start_trimmed).total_seconds()
+        total_task_minutes = total_task_seconds // 60
+        pause_minutes = max(0, total_task_minutes - work_minutes)
+        print(f"{self.work_seconds=} {work_minutes=} | {task_start_trimmed} {task_end_trimmed} | {total_task_seconds=} {total_task_minutes=} {pause_minutes=}")
+        return work_minutes, pause_minutes, total_task_minutes
 
-    def _get_pause_duration(self) -> int:
-        """
-        checks if there are any pauses during the task and returns the total pause duration in seconds
-        :return: int seconds
-        """
-        total_task_seconds = (self.task_end_time - self.task_start_time).total_seconds()
-        pause_seconds = total_task_seconds - self.seconds_accumulated
-
-        return pause_seconds
 
     # if there is an error in saving the data to the Excel file (e.g., file is opened and so permission is denied), we have to stop timer and show 'Error' status
     # when user clicks stop_btn again, we have to try saving to the Excel again (e.g., user closed the file now and hit stop_btn again)
@@ -466,17 +477,15 @@ class TaskTimer:
         if self.is_timer_running != TimerStatus.STOPPED:
             # to capture when the task has ended and to be logged to the Excel
             self.task_end_time = dt.datetime.now()
-            # calculate the seconds accumulated if the is_timer_status is not paused
-            # as the _accumulator is called only when paused
+            # accumulate seconds if the timer is not in paused state before ending the task
             if self.is_timer_running != TimerStatus.PAUSED:
-                # as the timer is still running (i.e., not paused), the end time of the segment would be same as the end time of the task
-                self.seconds_accumulated += (self.task_end_time - self.segment_start).total_seconds()
+                self.segment_end_time = dt.datetime.now()
+                self._seconds_accumulator()
 
+            work_minutes, pause_minutes, total_task_minutes = self._calculate_duration()
             # get the work duration in hh:mm format
-            work_duration = self._humanize_time(self.seconds_accumulated)
-            # get pause seconds only after final seconds_accumulated is arrived as pause_seconds is nothing but total_seconds - work_seconds (i.e., seconds_accumulated)
-            pause_seconds = self._get_pause_duration()
-            pause_duration = self._humanize_time(pause_seconds)
+            work_duration = self._humanize_time(work_minutes)
+            pause_duration = self._humanize_time(pause_minutes)
 
             # to avoid capturing placeholder text as notes
             if self.is_placeholder_active:
@@ -492,11 +501,11 @@ class TaskTimer:
                                                       Work_Duration=work_duration,
                                                       Notes=task_notes,
                                                       Pause_Duration=pause_duration,
-                                                      Start_Time=f"{self.task_start_time:%I:%M:%S %p}",
-                                                      End_Time=f"{self.task_end_time:%I:%M:%S %p}",
-                                                      Work_Seconds=self.seconds_accumulated,
-                                                      Pause_Seconds=pause_seconds,
-                                                      Total_Seconds= (self.task_end_time - self.task_start_time).total_seconds()
+                                                      Start_Time=f"{self.task_start_time:%I:%M %p}",
+                                                      End_Time=f"{self.task_end_time:%I:%M %p}",
+                                                      Work_Minutes= work_minutes,
+                                                      Pause_Minutes= pause_minutes,
+                                                      Total_Minutes= total_task_minutes
                                                       )
             # show status of saving the data to the Excel file
             if write_status:
@@ -540,9 +549,10 @@ class TaskTimer:
             self.is_timer_running = TimerStatus.STOPPED
             self.task_list_menu.configure(state="normal")
             self.task_start_time = None
-            self.segment_start = None
             self.task_end_time = None
-            self.segment_end = None
+            self.segment_start_time = None
+            self.segment_end_time = None
+            self.work_seconds = 0.0
             self.timer_text.set("00:00:00")
             self.notes_textbox.delete("1.0", "end") # clear notes
             self._show_placeholder() # show placeholder text
@@ -714,12 +724,21 @@ class TaskTimer:
         # stop the timer
         self._end_timer()
 
+        # cleanups to ensure no memory leaks
+        if self.status_update_queue:
+            self.app.after_cancel(self.status_update_queue)
+
+        if self.timer_running_queue:
+            self.app.after_cancel(self.timer_running_queue)
+
+        # stop the system tray icon
         if self.systray_icon:
             self.systray_icon.stop()
             self.systray_icon = None
 
         # destroy ctk window and exit the mainloop
         self.app.destroy()
+        sys.exit(0)
 
     # ---------system tray icon [end]---------
 
