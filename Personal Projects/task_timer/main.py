@@ -22,6 +22,9 @@ import sys
 import threading
 # to create a sys tray icon and to create menu items for sys tray icon right click
 import pystray
+# to get dpi scaling
+import ctypes
+from ctypes import windll
 
 
 class TimerStatus(Enum):
@@ -367,11 +370,11 @@ class TaskTimer:
             self.timer_running_queue = self.app.after(1000, self._update_timer_display)
 
 
-    def _humanize_time(self, minutes) -> str:
+    def _humanize_time(self, minutes):
         """
         Formats the total minutes H:MM string format to be logged to Excel
         Handles durations longer than 24 hours by accumulating hours
-        :return: str: 2h 12m
+        :return: str: 2h 12m or 0
         """
         # this is incorrect as there may be pause time in between
         # difference = self.task_end_time - self.task_start_time
@@ -381,7 +384,7 @@ class TaskTimer:
             hours, minutes = divmod(minutes, 60)
             return f"{hours:.0f}h {minutes:02.0f}m" if hours else f"{minutes:.0f}m"
         else:
-            return "0"
+            return 0
 
 
     def _seconds_accumulator(self):
@@ -445,20 +448,50 @@ class TaskTimer:
 
     def _calculate_duration(self):
         """
-        calculates work_minutes, pause_minutes, total_minutes at the end of the task to be logged to Excel
+        calculates work_minutes, pause_minutes, and total_task_minutes at the end of the task to be saved to Excel
+        ensures work_minutes + pause_minutes == total_task_minutes, to align with start and end time shown in hh:mm in Excel
         """
-        # we consider only completed minutes and seconds, fractional seconds (i.e., .total_seconds()) are ignored
-        work_minutes = self.work_seconds // 60
 
-        # trim seconds to match with Excel visible times
+        # trim the seconds for Excel visible times
         task_start_trimmed = self.task_start_time.replace(second=0, microsecond=0)
         task_end_trimmed = self.task_end_time.replace(second=0, microsecond=0)
 
-        total_task_seconds = (task_end_trimmed - task_start_trimmed).total_seconds()
-        total_task_minutes = total_task_seconds // 60
-        pause_minutes = max(0, total_task_minutes - work_minutes)
-        print(f"{self.work_seconds=} {work_minutes=} | {task_start_trimmed} {task_end_trimmed} | {total_task_seconds=} {total_task_minutes=} {pause_minutes=}")
+        total_task_seconds_trimmed = int( (task_end_trimmed - task_start_trimmed).total_seconds() )
+        total_task_minutes = total_task_seconds_trimmed // 60
+
+        # calculate total wall-clock seconds for the task
+        # cast to int for consistency with work_seconds
+        total_actual_seconds = int( (self.task_end_time - self.task_start_time).total_seconds() )
+
+        # Since we accumulate the work_seconds at hh:mm:ss level, i.e., at seconds precision,
+        # we also get the pause duration at seconds precision
+        # max to cover cases where work_seconds may be more than total_actual_seconds
+        pause_seconds = max(0, total_actual_seconds - self.work_seconds)
+        pause_minutes = pause_seconds // 60
+
+        # derive work_minutes to ensure the work_m + pause_m = total_m
+        work_minutes = total_task_minutes - pause_minutes
+        work_minutes = max(0, work_minutes)  # Ensure non-negative
+
         return work_minutes, pause_minutes, total_task_minutes
+
+
+    def _log_data(self):
+        work_minutes, pause_minutes, total_task_minutes = self._calculate_duration()
+
+        write_status = self._append_data_to_excel(
+            sheet_name="Log",
+            Date=f"{self.task_start_time:%d-%b-%Y}",
+            Task=self.current_task,
+            Start=f"{self.task_start_time:%I:%M:%S}",
+            End=f"{self.task_end_time:%I:%M:%S}",
+            Total_Seconds = int((self.task_end_time - self.task_start_time).total_seconds()),
+            Work_Seconds = self.work_seconds,
+            Work_Minutes = work_minutes,
+            Pause_Minutes = pause_minutes,
+            Total_Minutes = total_task_minutes
+        )
+        print(f"Log write status: {write_status}")
 
 
     # if there is an error in saving the data to the Excel file (e.g., file is opened and so permission is denied), we have to stop timer and show 'Error' status
@@ -510,6 +543,7 @@ class TaskTimer:
             # show status of saving the data to the Excel file
             if write_status:
                 self._update_status_label("Saved", 0)
+                self._log_data()
                 self._reset_timer()
                 self.current_task=""
                 # we can't edit combobox when the state is disabled
@@ -882,6 +916,19 @@ class TaskTimer:
         signature_label.grid(row=6, column=1, sticky="se", columnspan=3)
 
 
+    def _get_dpi_scaling(self, hwnd):
+        """
+        Returns the DPI scaling factor for the given window handle.
+        Example: 1.0 for 100%, 1.25 for 125%, 1.5 for 150%, etc.
+        """
+        try:
+            dpi = windll.user32.GetDpiForWindow(hwnd)
+            return dpi / 96.0
+        except Exception as e:
+            print(f"Error getting DPI: {e}")
+            return 1.0
+
+
     def position_window(self):
         # -----------positioning window in the bottom right corner of the screen-----------
         self.app.update_idletasks()
@@ -898,7 +945,11 @@ class TaskTimer:
         app_width = 240
         app_height = 280
 
-        dpi_scale_factor = 1.5
+        # Get window handle for DPI detection
+        hwnd = self.app.winfo_id()
+        # 1.5
+        dpi_scale_factor = self._get_dpi_scaling(hwnd)
+        print(f"{dpi_scale_factor=}")
 
         screen_width_logical = self.app.winfo_screenwidth()
         screen_height_logical = self.app.winfo_screenheight()
