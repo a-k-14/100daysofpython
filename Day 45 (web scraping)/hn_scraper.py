@@ -1,5 +1,5 @@
-# GOAL - to scrap y combinator site with BS4
-from PIL.Image import preinit
+# GOAL - to scrap Y Combinator site with BS4
+# from PIL.Image import preinit
 from bs4 import BeautifulSoup
 import requests
 import time
@@ -42,6 +42,7 @@ def scrape_hn_old() -> None:
     # convert the number to int - int()
     article_upvotes = [int(score.string.split()[0]) for score in soup.find_all(name="span", class_="score")]
 
+    #default sep is space " "
     print(article_titles, article_links, article_upvotes, sep="\n")
 
     # get the article with max upvotes
@@ -50,7 +51,7 @@ def scrape_hn_old() -> None:
 
     print(article_titles[index_of_max_upvotes], article_links[index_of_max_upvotes], article_upvotes[index_of_max_upvotes], sep="\n")
 
-# if we scrape hn live version where the structure has changed a little, there are chances that we may have articles with no upvotes at all i.e. 0 upvotes
+# if we scrape hn live version where the structure has changed a little, there are chances that we may have articles with no upvotes at all i.e., 0 upvotes
 # in such cases hn does not show 0, the upvote tag is absent
 # in such case, the number of articles and the number of upvotes we capture will not match
 # i.e. len(article_tage) != len(article_upvotes)

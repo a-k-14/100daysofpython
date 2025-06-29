@@ -11,3 +11,4 @@
 ## Limitation
 
 + Data loss if the system crashes and there is a task that was running/paused and not yet logged to the Excel file
+

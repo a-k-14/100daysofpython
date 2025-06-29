@@ -39,4 +39,4 @@ name_tag = soup.select_one(selector="#name")
 
 # get all the headings
 headings = soup.select(selector=".heading")
-# print(headings)
+print(headings)

@@ -5,12 +5,12 @@
 # stores the start time, end time in Excel on click of end button
 # resets timer on reset button click
 import time
-
 import customtkinter as ctk
 import os
 import pandas as pd
 from PIL.ImageFile import ImageFile
 from openpyxl import Workbook, load_workbook
+from openpyxl.utils import get_column_letter
 from openpyxl.utils.exceptions import InvalidFileException
 import datetime as dt
 from enum import Enum
@@ -267,6 +267,8 @@ class TaskTimer:
 
             # 3. append the new data
             sheet.append(list(kwargs.values()))
+            col_letter = get_column_letter("Date")
+            sheet.column_dimensions
 
             # 4. save and close the Excel file
             wb.save(self.excel_file)
