@@ -267,8 +267,6 @@ class TaskTimer:
 
             # 3. append the new data
             sheet.append(list(kwargs.values()))
-            col_letter = get_column_letter("Date")
-            sheet.column_dimensions
 
             # 4. save and close the Excel file
             wb.save(self.excel_file)
@@ -867,13 +865,13 @@ class TaskTimer:
         # logo_label.grid(row=1, column=1, padx=(10,5), pady=5)
 
         title_label = ctk.CTkLabel(toolbar_frame, text=self.app_title, font=ctk.CTkFont(size=12))
-        title_label.grid(row=1, column=2, sticky="w", pady=5, padx=10)
+        title_label.grid(row=1, column=2, sticky="w", pady=(8,5), padx=10)
 
         custom_minimize_btn = ctk.CTkButton(toolbar_frame, text="\u2013", fg_color="#343638",
                                             hover_color="#585a5c", width=40, height=20,
                                             cursor="hand2", font=("Segoe UI Symbol", 15),
                                             command=self._hide_app_window)
-        custom_minimize_btn.grid(row=1, column=2, sticky="e", padx=5, pady=5)
+        custom_minimize_btn.grid(row=1, column=3, sticky="e", padx=(10,5), pady=5)
         # to ensure the custom_minimize button sticks to the right edge
         toolbar_frame.grid_columnconfigure(2, weight=1)
 
@@ -924,18 +922,19 @@ class TaskTimer:
         # button frame to hold the buttons and adjust their spacing and widths
         # we have a separate frame for buttons as we have to place 4 buttons in 3 columns
         buttons_frame = ctk.CTkFrame(self.app, fg_color="transparent", height=30)
-        buttons_frame.grid(row=6, column=1, columnspan=3, sticky="we")
+        buttons_frame.grid(row=6, column=1, columnspan=3, sticky="we", pady=(10,0))
 
+        # column weight to ensure the reset button takes more space
         buttons_frame.grid_columnconfigure(3, weight=2)
-        buttons_frame.grid_columnconfigure(1, weight=1)
-        buttons_frame.grid_columnconfigure(2, weight=1)
+        # buttons_frame.grid_columnconfigure(1, weight=1)
+        # buttons_frame.grid_columnconfigure(2, weight=1)
 
         # buttons to control the functionality
         # self.start_btn is an instance variable as the text changes ▶ -> ⏸ in run_timer method
         self.start_btn = ctk.CTkButton(buttons_frame, text="▶", command=self._run_timer, cursor="hand2", width=50,
                                        font=("Segoe UI Symbol", 16, "bold"), fg_color="#085bbe",
                                        hover_color="#05428b")
-        self.start_btn.grid(padx=10, row=6, column=1, sticky="we", pady=10)
+        self.start_btn.grid(padx=10, row=6, column=1, sticky="we")
 
         end_btn = ctk.CTkButton(buttons_frame, text="⏹", width=50, cursor="hand2",
                                 font=("Segoe UI Symbol", 16, "bold"), fg_color="#085bbe",
@@ -952,11 +951,16 @@ class TaskTimer:
         open_excel_btn = ctk.CTkButton(buttons_frame, image=excel_btn_icon, cursor="hand2", fg_color="#242424",
                                        border_color="#414449", border_width=0, hover_color="#414449", width=1,
                                        text="", command=self._open_excel_file)
-        open_excel_btn.grid(row=6, column=4, padx=(0,10), sticky="w", pady=10)
+        open_excel_btn.grid(row=6, column=4, padx=(0,10), sticky="w")
 
-        signature_label = ctk.CTkLabel(self.app, text="akshay;)", text_color="#303030", fg_color="transparent",
+        # ctk.CTkLabel(self.app, text=f"Today 2h 34m", text_color="#606368", font=("Segoe UI", 16, "bold"), bg_color="#343638", corner_radius=18, padx=10) 545c63
+
+        days_work_time_label = ctk.CTkLabel(toolbar_frame, text=f"Day: 21h 34m", text_color="#575f66", font=("Segoe UI", 13, "bold"))
+        days_work_time_label.grid(row=1, column=2, sticky="e")
+
+        signature_label = ctk.CTkLabel(self.app, text="akshay;)", text_color="#272727", fg_color="transparent",
                                          font=ctk.CTkFont(size=8, weight="bold", slant="italic"), height=5)
-        signature_label.grid(row=6, column=1, sticky="se", columnspan=3)
+        signature_label.grid(row=7, column=3, sticky="se")
 
 
     def _get_dpi_scaling(self, hwnd):

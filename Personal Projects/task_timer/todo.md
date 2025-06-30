@@ -1,4 +1,13 @@
 # Features
+
+## Priority-1
+- Popup window to mark tasks active inactive
+  - small icon button next to drop down to open the popup
+  - popup is a scrollable frame with two columns in popup > Task, checkbox
+  - Ok button at the bottom
+- Show daily work hours on the app to avoid opening Excel or Power bi
+
+## Priority-2
 + add `debug print` method to get function names and line numbers in the console print
 + rounded corners for the app window
 + `refresh button` - to refresh tasklist if any changes are made in Excel manually *(e.g., renamed General to General - Personal while the app was open)*
