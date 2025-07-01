@@ -5,7 +5,7 @@
   - small icon button next to drop down to open the popup
   - popup is a scrollable frame with two columns in popup > Task, checkbox
   - Ok button at the bottom
-- Show daily work hours on the app to avoid opening Excel or Power bi
+- ~~Show daily work hours on the app to avoid opening Excel or Power bi~~ *1-7-25*
 
 ## Priority-2
 + add `debug print` method to get function names and line numbers in the console print
