@@ -60,6 +60,11 @@ class TaskTimer:
         # excel icon for excel_btn
         self.excel_btn_icon = "excel_btn_icon.png"
 
+
+        # to track the work duration for the current date
+        self.current_date = dt.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        self.days_work_minutes = self._get_days_work_minutes()
+
         # get the task list from the Excel if it exists, to populate task_list_menu combobox dropdown
         self.task_list = self._get_task_list()
         # task selected from the task_list_menu combobox
@@ -82,6 +87,7 @@ class TaskTimer:
         self.is_placeholder_active = True
 
         # declared it here as these are used by multiple methods
+        self.days_work_label = None
         self.task_list_menu = None
         self.status_label = None
         self.timer_display = None
@@ -117,7 +123,7 @@ class TaskTimer:
         # retain the top position for 500 ms and release after that
         self.app.after(500, lambda: self.app.attributes('-topmost', False))
 
-        # to track the system sleep/freeze/hang etc.
+        # to track the system sleep/freeze/hang phases etc.
         self.last_ui_update_mono = time.monotonic()
         self.last_ui_update_time = dt.datetime.now()
         # perpetual loop to log last UI update time to detect system sleep/freeze/hang etc.
@@ -126,6 +132,35 @@ class TaskTimer:
         self.auto_end = False
 
         self.app.mainloop()
+
+
+    def _get_days_work_minutes(self) -> int:
+        """
+        Get the total of days work minutes from the Excel when the app is opened
+        If the Excel does not exist, reruns 0
+        :return:
+        """
+        # 1. check if the Excel file exists
+        if os.path.exists(self.excel_file) and os.path.getsize(self.excel_file) > 0:
+            # check if the Time sheet exists and catch errors on read
+            try:
+                # 2. read the Time sheet in the Excel file
+                time_df = pd.read_excel(self.excel_file, sheet_name=self.excel_time_sheet)
+
+                # check if DF is not empty (e.g., only headers)
+                if not time_df.empty:
+                    # get the line items of current date
+                    days_time_df = time_df[ time_df["Date"] == self.current_date ]
+                    days_work_minutes_list = days_time_df["Work_Minutes"].tolist()
+                    days_work_minutes = sum(days_work_minutes_list)
+                    return days_work_minutes
+            except pd.errors.ParserError as e:
+                print(f"Error reading the file to get the Time list: {e}")
+            except Exception as e:
+                # catch any other unexpected errors
+                print(f"An unexpected error occurred while getting the Time list: {e}")
+
+        return 0
 
 
     def _get_task_list(self):
@@ -408,8 +443,8 @@ class TaskTimer:
 
     def _humanize_time(self, minutes):
         """
-        Formats the total minutes H:MM string format to be logged to Excel
-        Handles durations longer than 24 hours by accumulating hours
+        Formats the total minutes to H:MM string format to be logged to Excel
+        Handles durations longer than 24 hours by accumulating the hours
         :return: str: 2h 12m or 0
         """
         # this is incorrect as there may be pause time in between
@@ -509,21 +544,36 @@ class TaskTimer:
         return work_minutes, pause_minutes, total_task_minutes
 
 
-    def _dev_log_data(self):
-        work_minutes, pause_minutes, total_task_minutes = self._calculate_duration()
+    # def _dev_log_data(self):
+    #     work_minutes, pause_minutes, total_task_minutes = self._calculate_duration()
+    #
+    #     write_status = self._append_data_to_excel(
+    #         sheet_name="Log",
+    #         Date=f"{self.task_start_time:%d-%b-%Y}",
+    #         Task=self.current_task,
+    #         Start=f"{self.task_start_time:%I:%M:%S}",
+    #         End=f"{self.task_end_time:%I:%M:%S}",
+    #         Total_Seconds = int((self.task_end_time - self.task_start_time).total_seconds()),
+    #         Work_Seconds = self.work_seconds,
+    #         Work_Minutes = work_minutes,
+    #         Pause_Minutes = pause_minutes,
+    #         Total_Minutes = total_task_minutes
+    #     )
 
-        write_status = self._append_data_to_excel(
-            sheet_name="Log",
-            Date=f"{self.task_start_time:%d-%b-%Y}",
-            Task=self.current_task,
-            Start=f"{self.task_start_time:%I:%M:%S}",
-            End=f"{self.task_end_time:%I:%M:%S}",
-            Total_Seconds = int((self.task_end_time - self.task_start_time).total_seconds()),
-            Work_Seconds = self.work_seconds,
-            Work_Minutes = work_minutes,
-            Pause_Minutes = pause_minutes,
-            Total_Minutes = total_task_minutes
-        )
+
+    def _update_days_work_minutes_display(self, current_task_work_minutes) -> None:
+        """
+        Update the UI to show the latest 'days work duration' after the end of the end of a task
+        :return: None
+        """
+        if self.current_date == dt.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0):
+            self.days_work_minutes += current_task_work_minutes
+        else:
+            self.current_date = dt.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            self.days_work_minutes = current_task_work_minutes
+
+        days_work_minutes_formated = self._humanize_time(self.days_work_minutes)
+        self.days_work_label.configure(text=f"Day: {days_work_minutes_formated}")
 
 
     def _log_data_to_excel(self) -> bool:
@@ -534,6 +584,8 @@ class TaskTimer:
         """
         # get the duration in minutes
         work_minutes, pause_minutes, total_task_minutes = self._calculate_duration()
+        # to update the days' work duration in the UI
+        self._update_days_work_minutes_display(work_minutes)
         # get the work duration in hh:mm format
         work_duration = self._humanize_time(work_minutes)
         pause_duration = self._humanize_time(pause_minutes)
@@ -547,7 +599,7 @@ class TaskTimer:
         # write data to the Excel Date, Task, Duration, Notes, Start Time, End Time, Seconds
         # print(f"{self.task_start_time:%d-%b-%Y}, {self.current_task}, {self._humanize_time()}, {self.notes_entry.get('1.0', 'end-1c')},{self.task_start_time:%I:%M %p}, {self.task_end_time:%I:%M %p}, {self.seconds_elapsed}")
         log_status = self._append_data_to_excel(self.excel_time_sheet,
-                                                  Date=f"{self.task_start_time:%d-%b-%Y}",
+                                                  Date=self.task_start_time.date(),
                                                   Task=self.current_task,
                                                   Work_Duration=work_duration,
                                                   Notes=task_notes,
@@ -588,7 +640,7 @@ class TaskTimer:
             # log the data to Excel
             log_status = self._log_data_to_excel()
             # log additional data for debugging
-            self._dev_log_data()
+            # self._dev_log_data()
 
             # show status of saving the data to the Excel file
             if log_status:
@@ -706,6 +758,8 @@ class TaskTimer:
         return os.path.join(base_path, file_name)
 
 
+    #---------system tray icon [start]---------
+
     def _get_icon(self, icon_name) -> ImageFile:
         """
         checks the existence of icon at the path returned by _get_resource_path() method
@@ -726,20 +780,16 @@ class TaskTimer:
 
             # create a blank image with a blue background
             icon_image = Image.new(mode="RGB", size=(36, 36), color="#05428b")
-            # get the initials of the app name to be written into blank image
-            # default in split is by " " space
-            app_name_initials = "".join([word[0] for word in self.app_title.split()])
             # create an image drawer object to write app name 'TK' for timekeeper to the blank image
             drawer = ImageDraw.Draw(icon_image)
             # get a font to draw the app initials into blank image
             # drawer.getfont() -> this gives 'self._draw(no_color_updates=True) # faster drawing without color changes'
             # image_font = ImageDraw.Draw(Image.new("RGB", (1, 1))).getfont()
             # draw app initials on to the blank image
-            drawer.text((10, 10), text=app_name_initials, fill="white")
+            drawer.text((10, 10), text="TK", fill="white")
 
         return icon_image
 
-    #---------system tray icon [start]---------
 
     def _initialize_systray_icon(self):
         """
@@ -865,13 +915,19 @@ class TaskTimer:
         # logo_label.grid(row=1, column=1, padx=(10,5), pady=5)
 
         title_label = ctk.CTkLabel(toolbar_frame, text=self.app_title, font=ctk.CTkFont(size=12))
-        title_label.grid(row=1, column=2, sticky="w", pady=(8,5), padx=10)
+        title_label.grid(row=1, column=1, sticky="w", pady=(7,3), padx=10)
+
+        # get the duration in hh:mm format for display
+        days_work_minutes_formated = self._humanize_time(self.days_work_minutes)
+        self.days_work_label = ctk.CTkLabel(toolbar_frame, text=f"Day: {days_work_minutes_formated}",
+                                       text_color="#575f66", font=("Segoe UI", 13, "bold"))
+        self.days_work_label.grid(row=1, column=2, sticky="e")
 
         custom_minimize_btn = ctk.CTkButton(toolbar_frame, text="\u2013", fg_color="#343638",
                                             hover_color="#585a5c", width=40, height=20,
                                             cursor="hand2", font=("Segoe UI Symbol", 15),
                                             command=self._hide_app_window)
-        custom_minimize_btn.grid(row=1, column=3, sticky="e", padx=(10,5), pady=5)
+        custom_minimize_btn.grid(row=1, column=3,  padx=(10,5), pady=5)
         # to ensure the custom_minimize button sticks to the right edge
         toolbar_frame.grid_columnconfigure(2, weight=1)
 
@@ -882,13 +938,24 @@ class TaskTimer:
         title_label.bind("<Button-1>", self._start_drag)
         title_label.bind("<B1-Motion>", self._do_drag)
 
+        self.days_work_label.bind("<Button-1>", self._start_drag)
+        self.days_work_label.bind("<B1-Motion>", self._do_drag)
+
         # dropdown menu to choose the tasks from task_list
         self.task_list_menu = ctk.CTkComboBox(self.app, values=self.task_list, command=self._list_menu_callback)
-        self.task_list_menu.grid(row=2, column=1, padx=10, pady=(10, 3), sticky="we", columnspan=3)
+        self.task_list_menu.grid(row=2, column=1, padx=(10,5), pady=(10, 0), sticky="we", columnspan=3)
         # remove the default option displayed from combobox dropdown (defaults to the first option)
         self.task_list_menu.set("")
         # to add a new task on press of the Enter key
         self.task_list_menu.bind("<Return>", self._add_task_on_enter)
+
+        # self.app.grid_columnconfigure(2, weight=1)
+        # excel_btn_icon = ctk.CTkImage(light_image=self._get_icon(self.excel_btn_icon),
+        #                               dark_image=self._get_icon(self.excel_btn_icon), size=(19, 19))
+        # open_excel_btn = ctk.CTkButton(self.app, cursor="hand2", fg_color="#242424", border_color="#6a6a6a", border_width=0, font=("Segoe UI Symbol", 16, "bold"), text_color="#6a6a6a",
+        #                                hover_color="#414449", width=1,
+        #                                text="🔧", command=self._open_excel_file)
+        # open_excel_btn.grid(row=2, column=3, padx=(0, 10), sticky="e", pady=(10, 3))
 
         # hint text to show how to add a new task to the task_list
         hint_label = ctk.CTkLabel(self.app, text="Type new task & press Enter", font=("Segoe UI", 12, "bold"), height=5, text_color="#7a848d")
@@ -953,12 +1020,7 @@ class TaskTimer:
                                        text="", command=self._open_excel_file)
         open_excel_btn.grid(row=6, column=4, padx=(0,10), sticky="w")
 
-        # ctk.CTkLabel(self.app, text=f"Today 2h 34m", text_color="#606368", font=("Segoe UI", 16, "bold"), bg_color="#343638", corner_radius=18, padx=10) 545c63
-
-        days_work_time_label = ctk.CTkLabel(toolbar_frame, text=f"Day: 21h 34m", text_color="#575f66", font=("Segoe UI", 13, "bold"))
-        days_work_time_label.grid(row=1, column=2, sticky="e")
-
-        signature_label = ctk.CTkLabel(self.app, text="akshay;)", text_color="#272727", fg_color="transparent",
+        signature_label = ctk.CTkLabel(self.app, text="akshay;)", text_color="#303030", fg_color="transparent",
                                          font=ctk.CTkFont(size=8, weight="bold", slant="italic"), height=5)
         signature_label.grid(row=7, column=3, sticky="se")
 
